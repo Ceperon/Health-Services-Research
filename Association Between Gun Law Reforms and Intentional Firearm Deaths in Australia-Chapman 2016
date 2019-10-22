@@ -1,0 +1,204 @@
+# Ronald Sanchez
+
+# install and load packages
+install.packages("plotrix",repos="http://lib.stat.cmu.edu/R/CRAN")
+install.packages("MASS",repos="http://lib.stat.cmu.edu/R/CRAN")
+library(plotrix)
+library(MASS)
+
+# load the firearms data and inspect columns
+data <- read.csv("~/Dropbox/{DRPH}/Bios 821 - Biostats 2/Assignment 2/AUdeaths_curated.csv")
+head(data)
+
+# total homocide rate [# homocidetotal/ risk of Person-Year x 100,000 --> incidence rate]
+data$homocidetotal_rate <-(data$homocidetotal/ data$personyearsatrisk)*100000
+head(data)
+
+#calculate the year model by taking substracting the intercept (1996) = Pre-law years
+data$year_model<-data$year-1996
+head(data)
+
+# recode pre-law and post-law years into binominal values (0,1, respectively)
+data$law <- ifelse(data$year < 1997,0,1)
+head(data)
+
+# GLM: log-linear model 
+# outcome (E(Y)) is total homocide rate; X1 = year X2=law and X1X2 = year x law; offset using log(person year)
+# log-linear is used because E(Y) is count variable 
+fit.law <- glm.nb(homocidetotal ~ year_model+law+year_model*law+ offset(log(personyearsatrisk)),data=data)
+
+data$fit_values<-predict.glm(fit.law, newdata=data.frame(data),
+                                 type= "response")/data$personyearsatrisk*100000
+summary(fit.law)
+head(data)
+
+# plot the incidence rate of total homicides
+plot(data$year,data$homocidetotal_rate, xlim=c(1979,2013), ylim=c(0,2.5),
+     xlab= "Year", ylab= c("Total Homocide Deaths","per 100,000 population"), pch = 20, type = 'o')
+
+# recreate graph F-D
+abline(v=1996, lty=3)
+ablineclip(lm(fit_values~year, data=data[data$year<=1996,]), x1=1979,x2=1996)
+ablineclip(lm(fit_values~year, data=data[data$year>=1997,]), x1=1997,x2=2013)
+
+# Predicted model fit glm for the expected total homocide rate
+data$fit_values<-predict.glm(fit.law, newdata=data.frame(data), type = "response")/data$personyearsatrisk*100000
+head(data)
+
+# glm log_linear model for pre- (fit 1) and post-law (fit-2) years
+fit1 <- glm.nb(homocidetotal ~ year+offset(log(personyearsatrisk)), data=data[data$year<=1996,])
+summary(fit1)
+
+fit2 <- glm.nb(homocidetotal ~ year+offset(log(personyearsatrisk)), data=data[data$year>=1997,])
+summary(fit2)
+
+# create a data frame for period 1 = pre-law & period 2 = post-law with Trend-estimate (RT) = annual death rate and 95 CI%
+
+Rate_Period<-data.frame("Period"=c("Pre_law","Post_law"),"Trend_estimate"=1,"Lower_CI"=1,"Upper_CI"=1)
+Rate_Period$Trend_estimate[1]<-round(exp(summary(fit1)$coefficients[2]), digits=3)
+Rate_Period$Trend_estimate[2]<-round(exp(summary(fit2)$coefficients[2]), digits=3)
+
+#set 95% confidence interval to upper and lower for pre- and post-law
+Rate_Period$Lower_CI[1] <- round(exp(confint(fit1)[2,1]), digits=3)
+Rate_Period$Upper_CI[1] <-round(exp(confint(fit1)[2,2]), digits=3)
+Rate_Period$Lower_CI[2] <-round(exp(confint(fit2)[2,1]), digits=3)  
+Rate_Period$Upper_CI[2] <- round(exp(confint(fit2)[2,2]), digits=3) 
+Rate_Period
+
+# GLM: Negative Binomial error model and log-linear (poisson)
+fit.law <- glm.nb(homocidetotal ~ year_model+law+year_model*law+ offset(log(personyearsatrisk)),data=data)
+summary(fit.law)
+
+fit.pois <- glm(homocidetotal ~ year_model+law+year_model*law+ offset(log(personyearsatrisk)), data=data, family=poisson(link="log"))
+summary(fit.pois)
+confint(fit.pois)
+
+# Find the beta coefficients of the Log-linear Poisson Model
+round(exp(summary(fit.pois)$coefficients),3)
+
+# Calculate the Ratio trend (RT) by comparing all 3 model strength for the best estimated values: pre- and post-law
+
+# set up a data frame to house 3 different model with trend ratio
+Ratio <- data.frame("Model"=c("seperate models","model with law","fit.pois"),"Trend_Ratio"=1,"Lower_CI"=1,"Upper_CI"=1)
+
+# seperate models that just takes the pre- and post-law and divide their beta coefficents 
+Ratio$Trend_Ratio[1]<-round((Rate_Period$Trend_estimate[2]/Rate_Period$Trend_estimate[1]), digits=3)
+
+# fit.law = fitted model with Negative binomial Error model
+Ratio$Trend_Ratio[2]<- round(exp(summary(fit.law)$coefficients[4]), digits=3)
+
+#fit.pois = poission regression model
+Ratio$Trend_Ratio[3]<- round(exp(summary(fit.pois)$coefficients[4]), digits=3)
+
+Ratio
+
+exp(summary(fit.law)$coefficients)
+round(exp(summary(fit.law)$coefficients)[3],3)
+
+# find p-value for negative binomial model fit for law& year interaction
+coef(summary(fit.law))
+
+# Find the 95% Confidence Interval for Model with law and year interaction 
+Ratio$Lower_CI[2]<-round(exp(confint(fit.law)), digits=3)[4,1]
+Ratio$Upper_CI[2]<-round(exp(confint(fit.law)), digits=3)[4,2]
+
+Ratio$Lower_CI[3]<-round(exp(confint(fit.pois)), digits=3)[4,1]
+Ratio$Upper_CI[3]<-round(exp(confint(fit.pois)), digits=3)[4,2]
+Ratio
+
+# Calculate the main effect of the Law impacts changes (annual death rate (RL))
+# find the beta coefficient, 95% CI and p-value for negative binomial model: law fit --> main effect of annual death rate from fit.law parameter only
+exp(summary(fit.law)$coefficients)
+exp(summary(fit.pois)$coefficients)
+
+round(exp(summary(fit.law)$coefficients)[3], digits=3)
+round(exp(summary(fit.pois)$coefficients)[3], digits=3)
+
+round(exp(confint(fit.law)), digits=3)
+round(exp(confint(fit.pois)), digits=3)
+
+coef(summary(fit.law))
+coef(summary(fit.pois))
+
+# Assess Poisson Regression model and Negative Binomials for Residuals
+
+# Residual plots and more for poisson regression for total homocides
+plot(fit.pois)
+
+# Residual plots and more for Negative Binomial Error model for total homocides
+plot(fit.law)
+
+# Identify which test distribution is better to use to analyze this dataset
+
+# Comparsion of mean and variance of the firearm homicide dataset (Poisson distribution works best when mean ~ variance)
+# This indicates that the overdispersion (presence of greater variability)
+
+mean(data$homocidetotal) 
+var(data$homocidetotal)
+sd(data$homocidetotal)
+mean(data$homocidetotal) < var(data$homocidetotal)
+
+# Results: Mean is much smaller than Variance
+
+# Using Likelihood Ratio Test (compare devarince of both models)
+# use Chi square analysis to if there is a signficant difference between the two models (negative binomial vs poisson)
+(ll.negbin <- logLik(fit.law))
+(ll.pois <- logLik(fit.pois))
+pchisq(2 * (ll.negbin - ll.pois), df=1, lower.tail=FALSE)
+
+# Creating author's table 3 for total homocides
+Mortality_pre <-data.frame(
+  Total_Homocide_and_Suicide_Deaths = rep(NA,1),
+  Pre_law = rep(NA,1),
+  CI_Lower = rep(NA,1), CI_Upper=rep(NA,1)
+)
+
+Mortality_pre[1,1] <- "Total Homicide"
+
+Mortality_post <-data.frame(
+  Post_law=rep(NA,1),
+  CI_Lower=rep(NA,1), CI_Upper=rep(NA,1)
+)
+
+Mortality_RT<-data.frame(
+  Annual_Death_Rate_RT=rep(NA,1),
+  CI_Lower=rep(NA,1), CI_Upper=rep(NA,1)
+)
+
+Mortality_P<-data.frame(
+  P=rep(NA,1)
+)
+
+Mortality_RL<-data.frame(
+  Annual_Death_Rate_RL=rep(NA,1),
+  CI_Lower=rep(NA,1), CI_Upper=rep(NA,1)
+)
+
+Mortality_P_law<-data.frame(
+  P=rep(NA,1)
+)
+
+Firearm_Homicide<- cbind(Mortality_pre, Mortality_post, Mortality_RT, Mortality_P, Mortality_RL, Mortality_P_law)
+
+# Add values to table 3
+Firearm_Homicide [2] <- Rate_Period$Trend_estimate[1]
+Firearm_Homicide [5] <- Rate_Period$Trend_estimate[2]
+
+Firearm_Homicide [3] <-Rate_Period$Lower_CI[1]
+Firearm_Homicide [4] <-Rate_Period$Upper_CI[1]
+Firearm_Homicide [6] <-Rate_Period$Lower_CI[2]
+Firearm_Homicide [7] <-Rate_Period$Upper_CI[2]
+
+Firearm_Homicide [8] <- round(exp(summary(fit.law)$coefficients[4]), digits=3)
+
+Firearm_Homicide [9] <-Ratio$Lower_CI[2]
+Firearm_Homicide [10] <-Ratio$Upper_CI[2]
+
+Firearm_Homicide [11] <- round(coef(summary(fit.law)), digits=3)[4,4]
+
+Firearm_Homicide [12] <-round(exp(summary(fit.law)$coefficients)[3], digits=3)
+
+Firearm_Homicide [13] <-round(exp(confint(fit.law)), digits=3) [3,1]
+Firearm_Homicide [14] <-round(exp(confint(fit.law)), digits=3) [3,2]
+
+Firearm_Homicide [15] <-round(coef(summary(fit.law)), digits=3) [3,4]
