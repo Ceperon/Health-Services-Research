@@ -3,11 +3,13 @@
 # install and load packages
 install.packages("plotrix",repos="http://lib.stat.cmu.edu/R/CRAN")
 install.packages("MASS",repos="http://lib.stat.cmu.edu/R/CRAN")
+install.packages("RCurl")
 library(plotrix)
 library(MASS)
+library(RCurl)
 
 # load the firearms data and inspect columns
-data <- read.csv("~/Dropbox/{DRPH}/Bios 821 - Biostats 2/Assignment 2/AUdeaths_curated.csv")
+data <- read.csv(textConnection(getURL("https://raw.githubusercontent.com/Ceperon/Health-Services-Research/master/AUdeaths_curated.csv")))
 head(data)
 
 # total homocide rate [# homocidetotal/ risk of Person-Year x 100,000 --> incidence rate]
